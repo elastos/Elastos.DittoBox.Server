@@ -4,7 +4,7 @@ After=network-online.target
 
 [Service]
 Type=forking
-RuntimeDirectory=elaoc-agent
+RuntimeDirectory=elaoc-agentd
 RuntimeDirectoryMode=755
 PIDFile=/var/run/elaoc-agentd/elaoc-agentd.pid
 WorkingDirectory=/var/lib/elaoc-agentd

@@ -442,13 +442,32 @@ static void shutdown(void)
     }
 }
 
-static void daemonize(void)
+static void daemonize(const char *pid_file_path)
 {
+   // Check if the PID file exists
+    FILE *pid_file;
+
+    if ((pid_file = fopen(pid_file_path, "r"))) {
+        vlogW("Another instance of the daemon is already running, PID file %s exists.\n", pid_file_path);
+        fclose(pid_file);
+    }
+
+    // Open the PID file for writing
+    pid_file = fopen(pid_file_path, "w+");
+    if (pid_file == NULL) {
+        vlogE("Couldn't open the PID file for writing: %s. Exiting.\n", pid_file_path);
+        exit(1);
+    }
+
     const pid_t pid = fork();
 
     if (pid > 0) {
-        vlogI("Forked successfully: PID: %d.", pid);
+        fprintf(pid_file, "%d", pid);
+        fclose(pid_file);
+        vlogI("Forked successfully: PID: %d.\n", pid);
         exit(0);
+    } else {
+        fclose(pid_file);
     }
 
     if (pid < 0) {
@@ -574,9 +593,6 @@ int main(int argc, char *argv[])
         getchar();
     }
 
-    if (!run_in_foreground)
-        daemonize();
-
     if (!*buffer) {
         realpath(argv[0], buffer);
         strcat(buffer, ".conf");
@@ -586,6 +602,9 @@ int main(int argc, char *argv[])
     if (!config) {
         return -1;
     }
+
+    if (!run_in_foreground)
+        daemonize(config->pidfile);
 
     // Initialize carrier options.
     memset(&opts, 0, sizeof(opts));

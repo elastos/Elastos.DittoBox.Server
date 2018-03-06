@@ -10,6 +10,8 @@
 
 #include "config.h"
 
+#define DEFAULT_PID_FILE "/var/run/elaoc-agentd/elaoc-agentd.pid"
+
 static void config_error(cfg_t *cfg, const char *fmt, va_list ap)
 {
     fprintf(stderr, "Config file error, line %d: ", cfg->line);
@@ -92,6 +94,9 @@ static void config_destroy(void *p)
 
     if (config->datadir)
         free(config->datadir);
+
+    if (config->pidfile)
+        free(config->pidfile);
 
     if (config->serverid)
         free(config->serverid);
@@ -203,6 +208,7 @@ PFConfig *load_config(const char *config_file)
         CFG_INT("loglevel", 3, CFGF_NONE),
         CFG_STR("logfile", NULL, CFGF_NONE),
         CFG_STR("datadir", NULL, CFGF_NONE),
+        CFG_STR("pidfile", NULL, CFGF_NONE),        
         CFG_STR("mode", NULL, CFGF_NODEFAULT),
         CFG_BOOL("plain", 0, CFGF_NONE),
         CFG_STR("server", NULL, CFGF_NONE),
@@ -312,6 +318,12 @@ PFConfig *load_config(const char *config_file)
     } else
         config->datadir = strdup(stropt);
 
+    stropt = cfg_getstr(cfg, "pidfile");
+    if (stropt) {
+        config->pidfile = strdup(stropt);
+    } else {
+        config->pidfile = strdup(DEFAULT_PID_FILE);
+    }
 
     stropt = cfg_getstr(cfg, "mode");
     if (!stropt) {

@@ -32,6 +32,8 @@ typedef struct {
 
     char *datadir;
 
+    char *pidfile;
+
     int mode;
     int options;
     char *serverid;
