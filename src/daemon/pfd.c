@@ -18,6 +18,9 @@
 
 #include "config.h"
 
+static const char *daemon_name = "elaoc-agentd";
+static const char *daemon_version = "0.1";
+
 static PFConfig *config;
 
 static ElaCarrier *carrier;
@@ -439,6 +442,27 @@ static void shutdown(void)
     }
 }
 
+static void daemonize(void)
+{
+    const pid_t pid = fork();
+
+    if (pid > 0) {
+        vlogI("Forked successfully: PID: %d.", pid);
+        exit(0);
+    }
+
+    if (pid < 0) {
+        vlogE("Forked failed. Exiting");
+        exit(1);
+    }
+
+    // Create a new SID for the child process
+    if (setsid() < 0) {
+        vlogE("SID creation failure. Exiting.\n");
+        exit(1);
+    }
+}
+
 static void signal_handler(int signum)
 {
     shutdown();
@@ -475,12 +499,31 @@ static int session_hash_compare(const void *key1, size_t len1,
         return 1;
 }
 
+static void show_version(void)
+{
+    printf("%s version: %s\n\n", daemon_name, daemon_version);
+}
+
+static void show_usage(void)
+{
+    printf(
+        "Usage: %s [OPTION]...\n"
+        "\n"
+        "Options:\n"
+        "  --config=FILE                Specify path to the config file.\n"
+        "  --foreground                 Run the daemon in foreground.\n"
+        "  --version                    Print version information.\n"
+        "  --help                       Print this help message.\n",
+        daemon_name);
+}
+
 int main(int argc, char *argv[])
 {
     ElaOptions opts;
     ElaCallbacks callbacks;
     char buffer[2048] = { 0 };
     int wait_for_attach = 0;
+    int run_in_foreground = 0;
     int rc;
     int opt;
     int idx;
@@ -495,9 +538,11 @@ int main(int argc, char *argv[])
 
     struct option options[] = {
         { "config",         required_argument,  NULL, 'c' },
-        { "debug",          no_argument,        NULL, 1 },
+        { "foreground",     no_argument,        NULL, 'f' },
+        { "debug",          no_argument,        NULL,  1  },
         { "help",           no_argument,        NULL, 'h' },
-        { NULL,             0,                  NULL, 0 }
+        { "version",        no_argument,        NULL, 'v' },
+        { NULL,             0,                  NULL,  0  }
     };
 
     while ((opt = getopt_long(argc, argv, "c:h?", options, &idx)) != -1) {
@@ -505,14 +550,20 @@ int main(int argc, char *argv[])
         case 'c':
             strcpy(buffer, optarg);
             break;
+        case 'f':
+            run_in_foreground = 1;
+            break;
         case 1:
             wait_for_attach = 1;
             break;
-
+        case 'v':
+            show_version();
+            exit(0);
+            break;
         case 'h':
         case '?':
         default:
-            printf("\nUSAGE: wmpfd [-c CONFIG_FILE]\n\n");
+            show_usage();
             exit(-1);
         }
     }
@@ -522,6 +573,9 @@ int main(int argc, char *argv[])
         printf("After debugger attached, press any key to continue......");
         getchar();
     }
+
+    if (!run_in_foreground)
+        daemonize();
 
     if (!*buffer) {
         realpath(argv[0], buffer);

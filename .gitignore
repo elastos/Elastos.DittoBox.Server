@@ -3,6 +3,7 @@
 *.a
 *.so
 *.swp
+*.log
 *.patch
 *.dylib
 .DS_Store
@@ -16,5 +17,5 @@ tags
 .config_status
 .install_status
 .source_status
-
+/src/daemon/elaoc-agentd
 
