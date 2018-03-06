@@ -1,0 +1,63 @@
+#!/bin/sh
+
+set -e
+
+test $DEBIAN_SCRIPT_DEBUG && set -v -x
+
+chperms() {
+	# chperms <user> <group> <perms> <file>
+	if ! OVERRIDE=`dpkg-statoverride --list $4 2>&1`; then
+		if [ -e $4 ]; then
+			chown $1:$2 $4
+			chmod $3 $4
+		fi
+	fi
+}
+
+case "$1" in
+  configure)
+    if ! getent passwd elaoc-agentd > /dev/null; then
+        adduser --system \
+                --quiet \
+                --group \
+                --no-create-home \
+                --disabled-password \
+                --home /var/lib/elaoc-agentd \
+                elaoc-agentd
+    fi
+
+    chperms elaoc-agentd elaoc-agentd 0775 /var/lib/elaoc-agentd
+
+    chperms root elaoc-agentd 0755 /etc/elaoc
+
+    chperms root elaoc-agentd 0644 /etc/elaoc/elaoc-agent.conf
+
+  ;;
+esac
+
+# Automatically added by dh_systemd_enable
+# This will only remove masks created by d-s-h on package removal.
+deb-systemd-helper unmask elaoc-agentd.service >/dev/null || true
+
+# was-enabled defaults to true, so new installations run enable.
+if deb-systemd-helper --quiet was-enabled elaoc-agentd.service; then
+	# Enables the unit on first installation, creates new
+	# symlinks on upgrades if the unit file has changed.
+	deb-systemd-helper enable elaoc-agentd.service >/dev/null || true
+else
+	# Update the statefile to add new symlinks (if any), which need to be
+	# cleaned up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state elaoc-agentd.service >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by dh_installinit
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
+	if [ -x "/etc/init.d/elaoc-agentd" ]; then
+		update-rc.d elaoc-agentd defaults >/dev/null
+		invoke-rc.d elaoc-agentd start || exit $?
+	fi
+fi
+# End automatically added section
+
+
+exit 0;

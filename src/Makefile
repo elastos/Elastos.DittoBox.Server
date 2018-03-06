@@ -4,7 +4,7 @@ PREFIX := $(abspath $(PREFIX))
 HOST   ?= $(uname -s)
 ARCH   ?= $(uname -m)
 
-MODULES = pfd
+MODULES = daemon
 
 all: install
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=Elastos Owncloud Agent
+After=network-online.target
+
+[Service]
+Type=forking
+RuntimeDirectory=elaoc-agent
+RuntimeDirectoryMode=755
+PIDFile=/var/run/elaoc-agentd/elaoc-agentd.pid
+WorkingDirectory=/var/lib/elaoc-agentd
+ExecStart=/usr/bin/elaoc-agentd --config=/etc/elaoc/elaoc-agent.conf
+User=elaoc-agentd
+Group=elaoc-agentd
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

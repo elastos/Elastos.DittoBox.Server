@@ -1,0 +1,13 @@
+Package: elaoc-agentd
+Source: elastos
+Version: 5.0.0+deb9u1
+Architecture: amd64
+Maintainer: Bin Li <libin@elastos.org>
+Installed-Size: 5000
+Pre-Depends: adduser
+Depends: lsb-base (>= 3.0), init-system-helpers (>= 1.18~), libc6 (>= 2.14), libsystemd0
+Homepage: http://www.elastos.org/
+Description: Elastos Owncloud Agent (daemon)
+ Elastos Owncloud Agent is a service forwarding agent for owncloud.
+ .
+ This package contains the elastos owncloud agent.

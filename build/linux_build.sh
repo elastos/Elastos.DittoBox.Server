@@ -67,7 +67,7 @@ if [ x"$(uname -m)" != x"${TARGET_ARCH}" ]; then
     fi
 fi
 
-if [ -z "${CARRIER_DIST_PATH} ]; then
+if [ -z "${CARRIER_DIST_PATH}" ]; then
     echo "Error: CARRIER_DIST_PATH environment not set"
     exit
 fi

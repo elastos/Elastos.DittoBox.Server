@@ -1,0 +1,42 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+  purge)
+    if [ -d /var/lib/elaoc-agentd ]; then
+      rm -rf /var/lib/elaoc-agentd
+    fi
+    if [ -d /var/run/elaoc-agentd ]; then
+      rm -rf /var/run/elaoc-agentd
+    fi
+  ;;
+esac
+
+# Automatically added by dh_installinit
+if [ "$1" = "purge" ] ; then
+	update-rc.d elaoc-agentd remove >/dev/null
+fi
+
+
+# In case this system is running systemd, we make systemd reload the unit files
+# to pick up changes.
+if [ -d /run/systemd/system ] ; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by dh_systemd_enable
+if [ "$1" = "remove" ]; then
+	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+		deb-systemd-helper mask elaoc-agentd.service >/dev/null
+	fi
+fi
+
+if [ "$1" = "purge" ]; then
+	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+		deb-systemd-helper purge elaoc-agentd.service >/dev/null
+		deb-systemd-helper unmask elaoc-agentd.service >/dev/null
+	fi
+fi
+# End automatically added section
+

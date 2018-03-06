@@ -46,7 +46,7 @@ case "$1" in
 esac
 done
 
-if [ -z "${CARRIER_DIST_PATH} ]; then
+if [ -z "${CARRIER_DIST_PATH}" ]; then
     echo "Error: CARRIER_DIST_PATH environment not set"
     exit
 fi
