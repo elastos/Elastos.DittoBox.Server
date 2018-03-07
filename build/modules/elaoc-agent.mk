@@ -71,7 +71,7 @@ define dev-dist
         mkdir -p debian/var/lib/elaoc-agentd; \
         mkdir -p debian/DEBIAN; \
         cp $(ROOT_DIR)/debian/* debian/DEBIAN; \
-        dpkg-deb --build debian elaoc-agentd.deb; \
+        fakeroot dpkg-deb --build debian elaoc-agentd.deb; \
     }
 endef
 
