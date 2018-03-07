@@ -5,18 +5,6 @@ ARCH="$(uname -m)"
 
 BUILD=debug
 
-MODE=$1
-
-case ${MODE} in
-    "client" | "server")
-        ;;
-    *)
-        echo "Error: Invalid command syntax."
-        echo "USAGE: ./elapfd.sh client | server"
-        echo ""
-        ;;
-esac
-
 case "${HOST}" in
     "Darwin")
         DSO_ENV=DYLD_LIBRARY_PATH
@@ -29,22 +17,14 @@ case "${HOST}" in
         exit 1;;
 esac
 
-export ${DSO_ENV}=${PWD}/../../build/_dist/${HOST}-${ARCH}/${BUILD}/lib
+export ${DSO_ENV}=${CARRIER_DIST_PATH}/${HOST}-${ARCH}/${BUILD}/lib
 
-CUR_DIR=${PWD}
-RUN_DIR=${PWD}
-DATA_DIR=.${MODE}-data
-
-if [ ! -e ${RUN_DIR}/elapfd ]; then
-    echo "Error: elapfd not available."
+if [ ! -e ${PWD}/elaoc-agentd ]; then
+    echo "Error: elaoc-agentd not available."
     exit 1
 fi
 
-if [ ! -d ${DATA_DIR} ]; then
-    mkdir -p ${DATA_DIR}
-fi
-
-cd ${RUN_DIR} && ./elapfd -c ${CUR_DIR}/${MODE}.conf $*
+./elaoc-agentd -c ${PWD}/elaoc-agent.conf --foreground $*
 
 exit 0
 

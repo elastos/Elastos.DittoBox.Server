@@ -35,8 +35,8 @@ define source-clean
 endef
 
 define dev-dist
-    @case $(HOST) in \
-        "Linux") \
+    case $(HOST) in \
+        "Linux"|"Raspbian") \
             ;; \
         *) \
             echo "Error: Unsupported distribution package on $(HOST)"; \
@@ -71,6 +71,9 @@ define dev-dist
         mkdir -p debian/var/lib/elaoc-agentd; \
         mkdir -p debian/DEBIAN; \
         cp $(ROOT_DIR)/debian/* debian/DEBIAN; \
+	if [ x$(ARCH) = x"armv7l" ]; then \
+	    sed -i "s%amd64%armhf%" debian/DEBIAN/control; \
+	fi; \
         fakeroot dpkg-deb --build debian elaoc-agentd.deb; \
     }
 endef

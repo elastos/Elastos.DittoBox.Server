@@ -14,6 +14,10 @@ CFLAGS := $(CFLAGS) -I../common -I$(CARRIER_DIST_PATH)/include -I$(INSTALL_INCLU
 
 LIBS = -L$(CARRIER_DIST_PATH)/lib -lelacommon -lelacarrier -lelasession -lconfuse -lpthread
 
+ifneq (,$(findstring $(HOST), Linux Raspbian))
+        LIBS := $(LIBS) -lrt
+endif
+
 OBJS = pfd.o config.o 
 
 .PHONY: all clean install
