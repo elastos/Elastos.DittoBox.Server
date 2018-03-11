@@ -49,20 +49,6 @@ static int service_validator(cfg_t *cfg, cfg_opt_t *opt)
     return 0;
 }
 
-static int services_validator(cfg_t *cfg, cfg_opt_t *opt)
-{
-    int nsvcs;
-
-    nsvcs = cfg_size(cfg, "services|service");
-
-    if (nsvcs == 0) {
-        cfg_error(cfg, "no service defined.");
-        return -1;
-    }
-
-    return 0;
-}
-
 static int not_null_validator(cfg_t *cfg, cfg_opt_t *opt)
 {
     if (cfg_getstr(cfg, opt->name) == NULL) {
@@ -104,8 +90,14 @@ static void config_destroy(void *p)
     if (config->server_address)
         free(config->server_address);
 
-    if (config->services)
-        deref(config->services);
+    if (config->secret_hello)
+        free(config->secret_hello);
+
+    if (config->plain_hello)
+        free(config->plain_hello);
+
+    if (config->svc)
+        deref(config->svc);
 
     if (config->users)
         deref(config->users);
@@ -128,16 +120,12 @@ static void service_destroy(void *p)
 static void user_destroy(void *p)
 {
     PFUser *user = (PFUser *)p;
-    char **s;
 
     if (!user)
         return;
 
     if (user->userid)
         free(user->userid);
-
-    for (s = user->services; *s != NULL; s++)
-        free(*s);
 }
 
 static void bootstrap_destroy(void *p)
@@ -163,7 +151,8 @@ static void bootstrap_destroy(void *p)
 PFConfig *load_config(const char *config_file)
 {
     PFConfig *config;
-    cfg_t *cfg, *svcs, *users, *sec;
+    PFService *service;
+    cfg_t *cfg, *svc, *sec;
     cfg_t *bootstraps;
     const char *stropt;
     int nsecs;
@@ -175,19 +164,6 @@ PFConfig *load_config(const char *config_file)
         CFG_STR("host", "127.0.0.1", CFGF_NONE),
         CFG_STR("port", NULL, CFGF_NODEFAULT),
         CFG_END()
-    };
-
-    cfg_opt_t services_opts[] = {
-        CFG_SEC("service", service_opts, CFGF_TITLE | CFGF_MULTI | CFGF_NO_TITLE_DUPES),
-    };
-
-    cfg_opt_t user_opts[] = {
-        CFG_STR_LIST("services", NULL, CFGF_NONE),
-        CFG_END()
-    };
-
-    cfg_opt_t users_opts[] = {
-        CFG_SEC("user", user_opts, CFGF_TITLE | CFGF_MULTI | CFGF_NO_TITLE_DUPES),
     };
 
     cfg_opt_t bootstrap_opts[] = {
@@ -208,13 +184,15 @@ PFConfig *load_config(const char *config_file)
         CFG_INT("loglevel", 3, CFGF_NONE),
         CFG_STR("logfile", NULL, CFGF_NONE),
         CFG_STR("datadir", NULL, CFGF_NONE),
-        CFG_STR("pidfile", NULL, CFGF_NONE),        
+        CFG_STR("pidfile", NULL, CFGF_NONE),
         CFG_STR("mode", NULL, CFGF_NODEFAULT),
         CFG_BOOL("plain", 0, CFGF_NONE),
         CFG_STR("server", NULL, CFGF_NONE),
         CFG_STR("server_address", NULL, CFGF_NONE),
-        CFG_SEC("services", services_opts, CFGF_NONE),
-        CFG_SEC("users", users_opts, CFGF_NONE),
+        CFG_STR("secret_hello", NULL, CFGF_NONE),
+        CFG_STR("plain_hello", NULL, CFGF_NONE),
+        CFG_SEC("service", service_opts, CFGF_NONE ),
+        CFG_STR_LIST("allowed_users", NULL, CFGF_NONE),
         CFG_END()
     };
 
@@ -222,8 +200,7 @@ PFConfig *load_config(const char *config_file)
     cfg_set_error_function(cfg, config_error);
     cfg_set_validate_func(cfg, NULL, not_null_validator);
     cfg_set_validate_func(cfg, "mode", mode_validator);
-    cfg_set_validate_func(cfg, "services", services_validator);
-    cfg_set_validate_func(cfg, "services|service", service_validator);
+    cfg_set_validate_func(cfg, "service", service_validator);
 
     rc = cfg_parse(cfg, config_file);
     if (rc != CFG_SUCCESS) {
@@ -304,15 +281,14 @@ PFConfig *load_config(const char *config_file)
     config->loglevel = (int)cfg_getint(cfg, "loglevel");
 
     stropt = cfg_getstr(cfg, "logfile");
-    if (stropt) {
+    if (stropt)
         config->logfile = strdup(stropt);
-    }
 
     stropt = cfg_getstr(cfg, "datadir");
     if (!stropt) {
         char datadir[PATH_MAX];
 
-        sprintf(datadir, "%s/%s/%s", getenv("HOME"), ".wpfd",
+        sprintf(datadir, "%s/%s/%s", getenv("HOME"), ".elaoc",
                 config->mode == MODE_CLIENT ? "client" : "server");
         config->datadir = strdup(datadir);
     } else
@@ -359,7 +335,7 @@ PFConfig *load_config(const char *config_file)
         }
     } else {
         if (config->mode == MODE_SERVER) {
-            cfg_error(cfg, "server option not avaliable");
+            cfg_error(cfg, "undesired server option");
             cfg_free(cfg);
             deref(config);
             return NULL;
@@ -378,7 +354,7 @@ PFConfig *load_config(const char *config_file)
         }
     } else {
         if (config->mode == MODE_SERVER) {
-            cfg_error(cfg, "server option not avaliable");
+            cfg_error(cfg, "undesired server option");
             cfg_free(cfg);
             deref(config);
             return NULL;
@@ -387,72 +363,68 @@ PFConfig *load_config(const char *config_file)
         config->server_address = strdup(stropt);
     }
 
-    svcs = cfg_getsec(cfg, "services");
-    if (!svcs) {
-        cfg_error(cfg, "missing services section.");
-        cfg_free(cfg);
-        deref(config);
-        return NULL;
-    }
-
-    nsecs = cfg_size(svcs, "service");
-    config->services = hashtable_create(nsecs * 2, 0, NULL, NULL);
-    if (!config->services) {
-        cfg_error(cfg, "out of memory");
-        cfg_free(cfg);
-        deref(config);
-        return NULL;
-    }
-
-    for (i = 0; i < nsecs; i++) {
-        PFService *svc = rc_zalloc(sizeof(PFService), service_destroy);
-        if (!svc) {
-            cfg_error(cfg, "out of memory");
-            deref(svc);
+    stropt = cfg_getstr(cfg, "secret_hello");
+    if (!stropt) {
+        if (config->mode == MODE_SERVER) {
+            cfg_error(cfg, "missing secret_hello");
+            cfg_free(cfg);
+            deref(config);
+            return NULL;
+        }
+    } else {
+        if (config->mode == MODE_CLIENT) {
+            cfg_error(cfg, "undesired server option");
             cfg_free(cfg);
             deref(config);
             return NULL;
         }
 
-        sec = cfg_getnsec(svcs, "service", i);
+        config->secret_hello = strdup(stropt);
+    }
 
-        stropt = cfg_title(sec);
-        svc->name = strdup(stropt);
-
-        stropt = cfg_getstr(sec, "host");
-        if (!stropt)
-            stropt = "127.0.0.1";
-        svc->host = strdup(stropt);
-
-        svc->port = cfg_getstr(sec, "port");
-        if (!svc->port) {
-            cfg_error(cfg, "missing port option for service");
-            deref(svc);
+    stropt = cfg_getstr(cfg, "plain_hello");
+    if (stropt) {
+        if (config->mode == MODE_SERVER) {
+            cfg_error(cfg, "undesired server option");
             cfg_free(cfg);
             deref(config);
             return NULL;
         }
 
-        svc->he.key = svc->name;
-        svc->he.keylen = strlen(svc->name);
-        svc->he.data = svc;
-
-        hashtable_put(config->services, &svc->he);
-        deref(svc);
+        config->plain_hello = strdup(stropt);
     }
+
+    svc = cfg_getsec(cfg, "service");
+    if (!svc) {
+        cfg_error(cfg, "Missing service options");
+        cfg_free(cfg);
+        deref(config);
+        return NULL;
+    }
+
+    service = rc_zalloc(sizeof(PFService), service_destroy);
+    if (!service) {
+        cfg_error(cfg, "Out of memory");
+        cfg_free(cfg);
+        deref(cfg);
+        return NULL;
+    }
+
+    stropt = cfg_getstr(svc, "host");
+    if (!stropt)
+        stropt = "127.0.0.1";
+    service->host = strdup(stropt);
+
+    stropt = cfg_getstr(svc, "port");
+    service->port = strdup(stropt);
+    config->svc = service;
 
     if (config->mode == MODE_SERVER) {
-        users = cfg_getsec(cfg, "users");
+        int n;
+        int i;
 
-        if (!users) {
-            cfg_error(cfg, "section users not missing");
-            cfg_free(cfg);
-            deref(config);
-            return NULL;
-        }
-
-        nsecs = cfg_size(users, "user");
-        config->users = hashtable_create(nsecs * 2, 0, NULL, NULL);
+        n = cfg_size(cfg, "allowed_users");
+        config->users = hashtable_create(n * 2, 0, NULL, NULL);
         if (!config->users) {
             cfg_error(cfg, "out of memory");
             cfg_free(cfg);
@@ -460,29 +432,26 @@ PFConfig *load_config(const char *config_file)
             return NULL;
         }
 
-        for (i = 0; i < nsecs; i++) {
-            int j;
-            int n;
+        for (i = 0; i < n; i++) {
             PFUser *user;
 
-            sec = cfg_getnsec(users, "user", i);
-            n = cfg_size(sec, "services");
-            user = rc_zalloc(sizeof(PFUser) + (n + 1) * sizeof(char *), user_destroy);
-
-            stropt = cfg_title(sec);
-            if (!ela_id_is_valid(stropt)) {
-                cfg_error(cfg, "user id '%s' is invalid", stropt);
-                deref(user);
+            user = rc_zalloc(sizeof(PFUser), user_destroy);
+            if (!user) {
+                cfg_error(cfg, "Out of memory");
                 cfg_free(cfg);
                 deref(config);
                 return NULL;
             }
-            user->userid = strdup(stropt);
 
-            for (j = 0; j < n; j++) {
-                stropt = cfg_getnstr(sec, "services", j);
-                user->services[j] = strdup(stropt);
+            stropt = cfg_getnstr(cfg, "allowed_users", i);
+            if (!ela_id_is_valid(stropt)) {
+                cfg_error(cfg, "User id '%s' is invalid", stropt);
+                cfg_free(cfg);
+                deref(user);
+                deref(config);
+                return NULL;
             }
+            user->userid = strdup(stropt);
 
             user->he.key = user->userid;
             user->he.keylen = strlen(user->userid);

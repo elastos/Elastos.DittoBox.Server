@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -15,6 +16,8 @@
 #include <vlog.h>
 #include <linkedhashtable.h>
 #include <rc_mem.h>
+#include <crypto.h>
+#include <base58.h>
 
 #include "config.h"
 
@@ -35,6 +38,25 @@ Hashtable *sessions;
 // Client only
 static ElaSession *cli_session;
 static int cli_streamid;
+
+static char *create_secret_hello(const char *plain_hello, char *digest, size_t len)
+{
+    char *sha;
+
+    if (strlen(plain_hello) >= 64) {
+        vlogE("Plain hello too long");
+        return NULL;
+    }
+
+    memset(digest, 0, len);
+    sha = sha256a(plain_hello, strlen(plain_hello), digest, len);
+    if (!sha) {
+        vlogE("Sha256 for plain hello error");
+        return NULL;
+    }
+
+    return sha;
+}
 
 static void session_entry_destroy(void *p)
 {
@@ -117,6 +139,8 @@ static void carrier_ready(ElaCarrier *w, void *context)
     int rc;
     char uid[ELA_MAX_ID_LEN+1];
     char addr[ELA_MAX_ADDRESS_LEN+1];
+    char secret_hello[128] = {0};
+    const char *hello = NULL;
 
     vlogI("Carrier is ready!");
     vlogI("User ID: %s", ela_get_userid(w, uid, sizeof(uid)));
@@ -130,7 +154,14 @@ static void carrier_ready(ElaCarrier *w, void *context)
     if (!ela_is_friend(w, friendid)) {
         vlogI("Portforwarding server not friend yet, send friend request...");
 
-        rc = ela_add_friend(w, config->server_address, "Elastos Carrier PFD/C");
+        if (config->plain_hello)
+            hello = create_secret_hello(config->plain_hello, secret_hello,
+                                        sizeof(secret_hello));
+
+        if (!hello)
+            hello = "Elastos Carrier PFD/C";
+
+        rc = ela_add_friend(w, config->server_address, hello);
         if (rc < 0) {
             vlogE("Add portforwarding server as friend failed (0x%8X)",
                   ela_get_error());
@@ -164,25 +195,24 @@ static void friend_request(ElaCarrier *w, const char *userid,
     int rc;
     int status = -1;
 
-    if (config->mode == MODE_SERVER &&
-            hashtable_exist(config->users, userid, strlen(userid))) {
+    if (config->mode == MODE_SERVER && (
+            hashtable_exist(config->users, userid, strlen(userid)) ||
+            strcmp(hello, config->secret_hello) == 0)) {
         status = 0;
     }
 
     vlogI("%s friend request from %s.", status == 0 ? "Accept" : "Refuse",
             info->userid);
 
-    if (status != 0) {
-        vlogI("Skipped unathorized friend request from %s.", userid);
-        return;
-    } else {
+	if (status == 0) {
         rc = ela_accept_friend(w, userid);
         if (rc < 0) {
             vlogE("Accept friend request failed(%08X).", ela_get_error());
-            return;
         } else {
             vlogI("Accepted user %s to be friend.", userid);
         }
+    } else {
+        vlogI("Skipped unathorized friend request from %s.", userid);
     }
 }
 
@@ -265,24 +295,18 @@ static void stream_state_changed(ElaSession *ws, int stream,
                 vlogI("Session request to portforwarding server success.");
             }
         } else if (state == ElaStreamState_connected) {
-            HashtableIterator it;
+            PFService *svc = config->svc;
+            int rc;
 
-            hashtable_iterate(config->services, &it);
-            while (hashtable_iterator_has_next(&it)) {
-                PFService *svc;
-                hashtable_iterator_next(&it, NULL, NULL, (void **)&svc);
-
-                int rc = ela_stream_open_port_forwarding(ws, stream,
-                            svc->name, PortForwardingProtocol_TCP, svc->host, svc->port);
-                if (rc <= 0)
-                    vlogE("Open portforwarding for service %s on %s:%s failed(%08X).",
-                          svc->name, svc->host, svc->port, ela_get_error());
-                else
-                    vlogI("Open portforwarding for service %s on %s:%s success.",
-                          svc->name, svc->host, svc->port);
-
-                deref(svc);
-            }
+            rc = ela_stream_open_port_forwarding(ws, stream,
+                            "owncloud", PortForwardingProtocol_TCP,
+                            svc->host, svc->port);
+            if (rc <= 0)
+                vlogE("Open portforwarding for owncloud on %s:%s failed(%08X).",
+                      svc->host, svc->port, ela_get_error());
+            else
+                vlogI("Open portforwarding for owncloud on %s:%s success.",
+                          svc->host, svc->port);
         }
     } else {
         if (state == ElaStreamState_initialized) {
@@ -314,10 +338,8 @@ static void session_request_callback(ElaCarrier *w, const char *from,
                                    const char *sdp, size_t len, void *context)
 {
     ElaSession *ws;
-    PFUser *user;
     char userid[ELA_MAX_ID_LEN + 1];
     char *p;
-    int i;
     int rc;
     int options = config->options;
 
@@ -339,8 +361,6 @@ static void session_request_callback(ElaCarrier *w, const char *from,
         return;
     }
 
-    // Server prepare the portforwarding services
-
     p = strchr(from, '@');
     if (p) {
         size_t len = p - from;
@@ -349,27 +369,14 @@ static void session_request_callback(ElaCarrier *w, const char *from,
     } else
         strcpy(userid, from);
 
-    user = (PFUser *)hashtable_get(config->users, userid, strlen(userid));
-    if (user == NULL) {
-        // Not in allowed user list. Refuse session request.
-        vlogI("Refuse session request from %s.", from);
-        ela_session_reply_request(ws, -1, "Refuse");
-        ela_session_close(ws);
-        return;
-    }
-
-    for (i = 0; user->services[i] != NULL; i++) {
-        PFService *svc = (PFService *)hashtable_get(config->services,
-                            user->services[i], strlen(user->services[i]));
-
-        rc = ela_session_add_service(ws, svc->name,
-                        PortForwardingProtocol_TCP, svc->host, svc->port);
-        if (rc < 0)
-            vlogE("Prepare service %s for %s failed(%08X).",
-                  svc->name, userid, ela_get_error());
-        else
-            vlogI("Add service %s for %s.", svc->name, userid);
-    }
+    rc = ela_session_add_service(ws, "owncloud",
+                                 PortForwardingProtocol_TCP,
+                                 config->svc->host, config->svc->port);
+    if (rc < 0)
+        vlogE("Prepare owncloud service for %s failed(%08X).",
+              userid, ela_get_error());
+    else
+        vlogI("Add owncloud service for %s.", userid);
 
     p = strdup(sdp);
     ela_session_set_userdata(ws, p);
@@ -550,8 +557,8 @@ int main(int argc, char *argv[])
 
     sys_coredump_set(true);
 
-    signal(SIGINT, signal_handler);
     // Uncatchable: signal(SIGKILL, signal_handler);
+    signal(SIGINT, signal_handler);
     signal(SIGHUP, signal_handler);
     signal(SIGTERM, signal_handler);
 

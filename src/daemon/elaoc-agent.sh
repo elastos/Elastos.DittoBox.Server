@@ -5,6 +5,22 @@ ARCH="$(uname -m)"
 
 BUILD=debug
 
+MODE=$1
+
+case ${MODE} in
+    "client")
+        CONF=client.conf
+        ;;
+    "server")
+        CONF=elaoc-agent.conf
+        ;;
+    *)
+        echo "Error: Invalid command syntax."
+        echo "USAGE: ./elaoc-agentd.sh client | server"
+        echo ""
+        ;;
+esac
+
 case "${HOST}" in
     "Darwin")
         DSO_ENV=DYLD_LIBRARY_PATH
@@ -24,7 +40,7 @@ if [ ! -e ${PWD}/elaoc-agentd ]; then
     exit 1
 fi
 
-./elaoc-agentd -c ${PWD}/elaoc-agent.conf --foreground $*
+./elaoc-agentd -c ${PWD}/${CONF} --foreground $*
 
 exit 0
 

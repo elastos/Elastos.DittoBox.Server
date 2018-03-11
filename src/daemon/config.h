@@ -9,8 +9,6 @@
 #define MODE_SERVER     2
 
 typedef struct {
-    HashEntry he;
-    char *name;
     char *host;
     char *port;
 } PFService;
@@ -18,7 +16,6 @@ typedef struct {
 typedef struct {
     HashEntry he;
     char *userid;
-    char *services[0];
 } PFUser;
 
 typedef struct {
@@ -38,8 +35,11 @@ typedef struct {
     int options;
     char *serverid;
     char *server_address;
-    
-    Hashtable *services;
+
+    char *secret_hello;
+    char *plain_hello;
+
+    PFService *svc;
     Hashtable *users;
 } PFConfig;
 
