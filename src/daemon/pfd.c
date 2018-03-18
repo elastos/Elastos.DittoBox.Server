@@ -175,16 +175,25 @@ static void carrier_ready(ElaCarrier *w, void *context)
     }
 }
 
+static const char *connection_str[] = {
+    "Connected",
+    "Disconnected",
+    "Unknown"
+};
+
 // Client only
 static void friend_connection(ElaCarrier *w, const char *friendid,
                               ElaConnectionStatus status, void *context)
 {
-    if (config->mode == MODE_SERVER)
+    if (config->mode == MODE_SERVER) {
+        vlogD("Friend peer %s changed to %s", connection_str[status]);
         return; // Server mode: do nothing.
+    }
 
     if (strcmp(friendid, config->serverid) != 0)
         return; // Ignore uninterested peer
 
+    vlogD("Portforwarding server changed to %s", connection_str[status]);
     peer_connection_changed(status);
 }
 
