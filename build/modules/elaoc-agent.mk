@@ -56,12 +56,12 @@ define dev-dist
         cp bin/elaoc-agentd debian/usr/bin; \
         strip debian/usr/bin/elaoc-agentd; \
         mkdir -p debian/usr/lib; \
-	cp $(CARRIER_DIST_PATH)/$(HOST)-$(ARCH)/$(BUILD)/lib/libelacommon.so  debian/usr/lib; \
-	cp $(CARRIER_DIST_PATH)/$(HOST)-$(ARCH)/$(BUILD)/lib/libelacarrier.so debian/usr/lib; \
-	cp $(CARRIER_DIST_PATH)/$(HOST)-$(ARCH)/$(BUILD)/lib/libelasession.so debian/usr/lib; \
-	strip debian/usr/lib/libelacommon.so; \
-	strip debian/usr/lib/libelacarrier.so; \
-	strip debian/usr/lib/libelasession.so; \
+        cp $(CARRIER_DIST_PATH)/$(HOST)-$(ARCH)/$(BUILD)/lib/libelacommon.so  debian/usr/lib; \
+        cp $(CARRIER_DIST_PATH)/$(HOST)-$(ARCH)/$(BUILD)/lib/libelacarrier.so debian/usr/lib; \
+        cp $(CARRIER_DIST_PATH)/$(HOST)-$(ARCH)/$(BUILD)/lib/libelasession.so debian/usr/lib; \
+        strip debian/usr/lib/libelacommon.so; \
+        strip debian/usr/lib/libelacarrier.so; \
+        strip debian/usr/lib/libelasession.so; \
         mkdir -p debian/etc/elaoc; \
         cp $(ROOT_DIR)/config/elaoc-agent.conf debian/etc/elaoc; \
         mkdir -p debian/lib/systemd/system; \
@@ -71,9 +71,9 @@ define dev-dist
         mkdir -p debian/var/lib/elaoc-agentd; \
         mkdir -p debian/DEBIAN; \
         cp $(ROOT_DIR)/debian/* debian/DEBIAN; \
-	if [ x$(ARCH) = x"armv7l" ]; then \
-	    sed -i "s%amd64%armhf%" debian/DEBIAN/control; \
-	fi; \
+        if [ x$(ARCH) = x"armv7l" ]; then \
+        sed -i "s%amd64%armhf%" debian/DEBIAN/control; \
+        fi; \
         fakeroot dpkg-deb --build debian elaoc-agentd.deb; \
     }
 endef
