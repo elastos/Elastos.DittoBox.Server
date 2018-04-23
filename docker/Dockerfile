@@ -9,7 +9,8 @@ ARG ELA_OC_AGENT_DEB
 
 RUN curl -sLo ela_oc_agent.deb ${ELA_OC_AGENT_DEB} && \
   dpkg -i ela_oc_agent.deb && \
-  rm -f ela_oc_agent.deb
+  rm -f ela_oc_agent.deb && \
+  cp /etc/elaoc/elaoc-agent.conf /etc/elaoc/elaoc-agent.conf.org
 
 COPY rootfs /
 
