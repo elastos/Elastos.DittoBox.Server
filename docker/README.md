@@ -45,7 +45,7 @@ docker run -d \
   -p 80:80 \
   -p 443:443 \
   --volume path_to_owncloud_files:/mnt/data \
-  elastos/ocserver
+  elastos/ocserver:10.0.7
 ```
 
 
