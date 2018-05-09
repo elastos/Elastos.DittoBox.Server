@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <assert.h>
 #include <pthread.h>
 
@@ -159,14 +160,10 @@ static void peer_connection_changed(ElaConnectionStatus status)
 static void carrier_ready(ElaCarrier *w, void *context)
 {
     int rc;
-    char uid[ELA_MAX_ID_LEN+1];
-    char addr[ELA_MAX_ADDRESS_LEN+1];
     char secret_hello[128] = {0};
     const char *hello = NULL;
 
     vlogI("Carrier is ready!");
-    vlogI("User ID: %s", ela_get_userid(w, uid, sizeof(uid)));
-    vlogI("Address: %s", ela_get_address(w, addr, sizeof(addr)));
 
     if (config->mode == MODE_SERVER)
         return; // Server mode: do nothing.
@@ -208,7 +205,7 @@ static void friend_connection(ElaCarrier *w, const char *friendid,
                               ElaConnectionStatus status, void *context)
 {
     if (config->mode == MODE_SERVER) {
-        vlogD("Friend peer %s changed to %s", connection_str[status]);
+        vlogD("Friend peer %s changed to %s", friendid, connection_str[status]);
         return; // Server mode: do nothing.
     }
 
@@ -247,20 +244,21 @@ static void friend_request(ElaCarrier *w, const char *userid,
     }
 }
 
+static const char *state_name[] = {
+    "raw",
+    "initialized",
+    "transport ready",
+    "connecting",
+    "connected",
+    "deactived",
+    "closed",
+    "error"
+};
+
 // Client only
 static void session_request_complete(ElaSession *ws, int status,
                 const char *reason, const char *sdp, size_t len, void *context)
 {
-    const char *state_name[] = {
-        "raw",
-        "initialized",
-        "transport ready",
-        "connecting",
-        "connected",
-        "deactived",
-        "closed",
-        "error"
-    };
     ElaStreamState state;
     int rc;
 
@@ -301,6 +299,8 @@ static void stream_state_changed(ElaSession *ws, int stream,
 {
     int rc;
     char peer[ELA_MAX_ID_LEN*2+8];
+
+    vlogD("Stream %d state changed to %s", stream, state_name[state]);
 
     ela_session_get_peer(ws, peer, sizeof(peer));
 
@@ -556,6 +556,51 @@ static int session_hash_compare(const void *key1, size_t len1,
         return 1;
 }
 
+#define ADDRESS_FILE    "address"
+
+static int announce_address(ElaCarrier *carrier, const char *datadir, const char *announce_cmd)
+{
+    char *address_file;
+    char uid[ELA_MAX_ID_LEN+1];
+    char address[ELA_MAX_ADDRESS_LEN+1];
+    char *cmd;
+    int fd;
+
+    assert(carrier);
+    assert(datadir);
+
+    if (!ela_get_userid(carrier, uid, sizeof(uid)))
+        return -1;
+
+    if (!ela_get_address(carrier, address, sizeof(address)))
+        return -1;
+
+    vlogI("User ID: %s", uid);
+    vlogI("Address: %s", address);
+
+    address_file = (char *)alloca(strlen(datadir) + strlen(ADDRESS_FILE) + 16);
+    sprintf(address_file, "%s/%s", datadir, ADDRESS_FILE);
+
+    fd = open(address_file, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd < 0)
+        return -1;
+
+    write(fd, address, strlen(address));
+    close(fd);
+
+    if (announce_cmd) {
+        cmd = (char *)alloca(strlen(datadir) + strlen(announce_cmd) + 128);
+        sprintf(cmd, "DATADIR=%s ADDRESS=%s sh -c '%s'", datadir, address, announce_cmd);
+        int rc = system(cmd);
+        if (rc == 0)
+            vlogI("Announce the node address success.");
+        else
+            vlogW("Announce the node address failed, exit code: %d", rc);
+    }
+
+    return 0;
+}
+
 static void show_version(void)
 {
     printf("%s version: %s\n\n", daemon_name, daemon_version);
@@ -689,6 +734,8 @@ int main(int argc, char *argv[])
         shutdown();
         return -1;
     }
+
+    announce_address(carrier, config->datadir, config->announce_address);
 
     rc = ela_session_init(carrier, session_request_callback, NULL);
     if (rc < 0) {

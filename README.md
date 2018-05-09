@@ -1,9 +1,9 @@
-OwnCloud Service over Elastos Carrier
-=====================================
+DittoBox Server
+===============
 
 ## Summary
 
-OwnCloud service can be accessed at anytime and from anywhere over Elastos Carrier network even the service is deployed behind router.
+DittoBox server integrate ownCloud Server and Elastos Carrier. You can acess you files at anytime and from anywhere over Elastos Carrier network even the server is deployed behind router.
 
 ## Build form source
 
@@ -33,7 +33,7 @@ Run the following commands to build agent on MacOS:
 
 ```shell
 $ cd build
-$ ./darwin_build.sh 
+$ ./darwin_build.sh
 
 ```
 
@@ -59,7 +59,7 @@ $ ./darwin_build.sh help
 
 Beaware, debian package of ownCloud agent would be generated through build command with **"dist"** option and only be allowed on **Linux**-like (Raspberry if runs Linux) system.
 
-## Deploy & Run 
+## Deploy & Run
 
 Recommended target platform: Ubuntu server 16.04 LTS / x86_64
 

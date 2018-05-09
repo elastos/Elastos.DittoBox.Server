@@ -1,6 +1,6 @@
-# Elastos: ownCloud based Personal Cloud Drive Server
+# DittoBox Server Docker image
 
-This is the official Elastos Personal Cloud Drive Server image from the ownCloud community edition, it is built from ownCloud [server container](https://registry.hub.docker.com/u/owncloud/server/). This image is designed to work with a data volume in the host filesystem.
+This is the official DittoBox Server image from the ownCloud community edition, it is built from ownCloud [server container](https://registry.hub.docker.com/u/owncloud/server/). This image is designed to work with a data volume in the host filesystem.
 
 
 ## Volumes
@@ -32,7 +32,7 @@ The available versions should be already pushed to the Docker Hub, but in case y
 
 ```
 source .env
-IMAGE_NAME=elastos/ocserver:${VERSION} ./hooks/build
+IMAGE_NAME=elastos/dittobox:${VERSION} ./hooks/build
 ```
 
 
@@ -42,10 +42,10 @@ The installation of `docker` is not covered by this instructions, please follow 
 
 ```bash
 docker run -d \
-  -p 80:80 \
-  -p 443:443 \
+  -p 8080:80 \
+  -p 8443:443 \
   --volume path_to_owncloud_files:/mnt/data \
-  elastos/ocserver:10.0.7
+  elastos/dittobox:10.0.7
 ```
 
 

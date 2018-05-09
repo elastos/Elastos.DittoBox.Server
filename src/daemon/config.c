@@ -106,6 +106,9 @@ static void config_destroy(void *p)
     if (config->pidfile)
         free(config->pidfile);
 
+    if (config->announce_address)
+        free(config->announce_address);
+
     if (config->serverid)
         free(config->serverid);
 
@@ -207,6 +210,7 @@ PFConfig *load_config(const char *config_file)
         CFG_STR("logfile", NULL, CFGF_NONE),
         CFG_STR("datadir", NULL, CFGF_NONE),
         CFG_STR("pidfile", NULL, CFGF_NONE),
+        CFG_STR("announce_address", NULL, CFGF_NONE),
         CFG_STR("mode", NULL, CFGF_NODEFAULT),
         CFG_BOOL("plain", 0, CFGF_NONE),
         CFG_STR("server", NULL, CFGF_NONE),
@@ -321,6 +325,13 @@ PFConfig *load_config(const char *config_file)
         config->pidfile = strdup(stropt);
     } else {
         config->pidfile = strdup(DEFAULT_PID_FILE);
+    }
+
+    stropt = cfg_getstr(cfg, "announce_address");
+    if (stropt) {
+        config->announce_address = strdup(stropt);
+    } else {
+        config->announce_address = NULL;
     }
 
     stropt = cfg_getstr(cfg, "mode");

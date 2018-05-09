@@ -18,8 +18,14 @@ then
   sed -i "s/secret_hello=5efa94085cb2977f90ddd1a671c70aa651cd8a2b62183c9cc647628795b12092/secret_hello=${SECRET}/g" ${ELA_OC_AGENT_CONFIG_FILE}
 fi
 
+if [[ ! -f ${ELA_OC_AGENT_DIR}/address.png ]]
+then
+    cp /var/www/owncloud/core/img/address-inv.png ${ELA_OC_AGENT_DIR}/address.png
+fi
+
 echo "Prepare Elastos oc-agent config file..."
 rm -f /etc/elaoc/elaoc-agent.conf
 ln -s ${ELA_OC_AGENT_CONFIG_FILE} /etc/elaoc/elaoc-agent.conf
+ln -s ${ELA_OC_AGENT_DIR}/address.png /var/www/owncloud/core/img/address.png
 
 true

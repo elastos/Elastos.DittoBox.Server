@@ -1,4 +1,4 @@
-FROM owncloud/server:latest
+FROM owncloud/server:10.0.7
 MAINTAINER elastos.org <devops@elastos.org>
 
 ARG VERSION
@@ -19,6 +19,6 @@ LABEL \
   org.label-schema.build-date=$BUILD_DATE \
   org.label-schema.vcs-ref=$VCS_REF \
   org.label-schema.vcs-url="https://github.com/elastos/Elastos.DittoBox.Server.git" \
-  org.label-schema.name="Elastos Cloud Server" \
+  org.label-schema.name="DittoBox Server" \
   org.label-schema.vendor="elastos.org" \
   org.label-schema.schema-version="1.0"

@@ -53,6 +53,8 @@ typedef struct {
 
     char *pidfile;
 
+    char *announce_address;
+
     int mode;
     int options;
     char *serverid;
