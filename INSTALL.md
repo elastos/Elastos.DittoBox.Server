@@ -151,23 +151,28 @@ https://github.com/elastos/Elastos.NET.Carrier.Native.SDK
 ```
 And follow steps of README.md of the repository to build carrier ndk distribution.
 
-### 2). Import Carrier NDK 
+### 2). Build ownCloud Agent
 
-After buiding native ndk distribution, you should export path of distribution to environment variable **"\$CARRIER_DIST_PATH"**:
+Once you have souce tree, to make compilation for the target to run on host Linux, need to execute following commands under directory of `${YOUR-SOURCE-ROOT}/build`:
 
 ```shell
-$ export CARRIER_DIST_PATH=YOUR-CARRIER-DIST-PATH
+$ cd YOUR-SOURCE-ROOT/build
+$ mkdir linux
+$ cd linux
+$ cmake ../..
+$ make
 ```
-
-This environment value will be used for building ownCloud agent.
-
-### 3). Build ownCloud Agent
-
-Run the following commands to build agent deb package on Ubuntu Linux:
+Also to build distribution with specific build type **Debug/Release**, as well as with customized install location of distributions, run the following commands:
 
 ```shell
-$ cd build
-$ ./linux_build.sh dist
+$ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=YOUR-INSTALL-PATH -DCARRIER_SDK_PATH=YOUR-PREBUILT-SDK-INSTALL-PATH ../..
+$ make
+$ make install
+```
+Eventually, to run the following command to release distribution package for your pre-release tests or even to customers.
+
+```bash
+$ make dist
 ```
 
 ### 3). Deployment

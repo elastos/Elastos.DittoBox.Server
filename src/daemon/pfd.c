@@ -52,11 +52,11 @@ static PFConfig *config;
 static ElaCarrier *carrier;
 
 typedef struct SessionEntry {
-    HashEntry he;
+    hash_entry_t he;
     ElaSession *session;
 } SessionEntry;
 
-Hashtable *sessions;
+hashtable_t *sessions;
 
 // Client only
 static ElaSession *cli_session;
@@ -256,7 +256,7 @@ static const char *state_name[] = {
 };
 
 // Client only
-static void session_request_complete(ElaSession *ws, int status,
+static void session_request_complete(ElaSession *ws, const char *bundle, int status,
                 const char *reason, const char *sdp, size_t len, void *context)
 {
     ElaStreamState state;
@@ -318,7 +318,7 @@ static void stream_state_changed(ElaSession *ws, int stream,
 
     if (config->mode == MODE_CLIENT) {
         if (state == ElaStreamState_initialized) {
-            rc = ela_session_request(ws, session_request_complete, NULL);
+            rc = ela_session_request(ws, NULL, session_request_complete, NULL);
             if (rc < 0) {
                 vlogE("Session request to portforwarding server peer failed(%08X)", ela_get_error());
                 delete_session(ws);
@@ -341,7 +341,7 @@ static void stream_state_changed(ElaSession *ws, int stream,
         }
     } else {
         if (state == ElaStreamState_initialized) {
-            rc = ela_session_reply_request(ws, 0, NULL);
+            rc = ela_session_reply_request(ws, NULL, 0, NULL);
             if (rc < 0) {
                 vlogE("Session request from %s, reply failed(%08X)", peer, ela_get_error());
                 free(ela_session_get_userdata(ws));
@@ -365,7 +365,7 @@ static void stream_state_changed(ElaSession *ws, int stream,
 }
 
 // Server and client
-static void session_request_callback(ElaCarrier *w, const char *from,
+static void session_request_callback(ElaCarrier *w, const char *from, const char *bundle,
                                    const char *sdp, size_t len, void *context)
 {
     ElaSession *ws;
@@ -387,7 +387,7 @@ static void session_request_callback(ElaCarrier *w, const char *from,
     if (config->mode == MODE_CLIENT) {
         // Client mode: just refuse the request.
         vlogI("Refuse session request from %s.", from);
-        ela_session_reply_request(ws, -1, "Refuse");
+        ela_session_reply_request(ws, NULL, -1, "Refuse");
         ela_session_close(ws);
         return;
     }
@@ -420,7 +420,7 @@ static void session_request_callback(ElaCarrier *w, const char *from,
                     &stream_callbacks, NULL);
     if (rc <= 0) {
         vlogE("Session request from %s, can not add stream(%08X)", from, ela_get_error());
-        ela_session_reply_request(ws, -1, "Error");
+        ela_session_reply_request(ws, NULL, -1, "Error");
         delete_session(ws);
         free(p);
     }
@@ -462,7 +462,7 @@ static void setup_portforwardings(void)
 
 static void shutdown(void)
 {
-    Hashtable *ss = sessions;
+    hashtable_t *ss = sessions;
 
     sessions = NULL;
     if (ss)
@@ -737,7 +737,15 @@ int main(int argc, char *argv[])
 
     announce_address(carrier, config->datadir, config->announce_address);
 
-    rc = ela_session_init(carrier, session_request_callback, NULL);
+    rc = ela_session_init(carrier);
+    if (rc < 0) {
+        fprintf(stderr, "Can not initialize Carrier session extension (%08X).",
+                ela_get_error());
+        shutdown();
+        return -1;
+    }
+
+    rc = ela_session_set_callback(carrier, NULL, session_request_callback, NULL);
     if (rc < 0) {
         fprintf(stderr, "Can not initialize Carrier session extension (%08X).",
                 ela_get_error());

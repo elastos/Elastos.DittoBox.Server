@@ -1,25 +1,17 @@
 #!/bin/sh
 
+SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
+
+# Running in installation or dist directory
+LDPATH="$(dirname "${SCRIPT_PATH}")/lib"
+ETCPATH="$(dirname "${SCRIPT_PATH}")/../etc"
+
+if [ ! -e ${SCRIPT_PATH}/elaoc-agentd ]; then
+    echo "Error: elapfd program not available."
+    exit 1
+fi
+
 HOST="$(uname -s)"
-ARCH="$(uname -m)"
-
-BUILD=debug
-
-MODE=$1
-
-case ${MODE} in
-    "client")
-        CONF=client.conf
-        ;;
-    "server")
-        CONF=elaoc-agent.conf
-        ;;
-    *)
-        echo "Error: Invalid command syntax."
-        echo "USAGE: ./elaoc-agentd.sh client | server"
-        echo ""
-        ;;
-esac
 
 case "${HOST}" in
     "Darwin")
@@ -29,18 +21,13 @@ case "${HOST}" in
         DSO_ENV=LD_LIBRARY_PATH
         ;;
     *)
-        echo "Error: Unsupported platform ${HOST}"
+        echo "Error: Unsupported platform"
         exit 1;;
 esac
 
-export ${DSO_ENV}=${CARRIER_DIST_PATH}/${HOST}-${ARCH}/${BUILD}/lib
+export ${DSO_ENV}=${LDPATH}
 
-if [ ! -e ${PWD}/elaoc-agentd ]; then
-    echo "Error: elaoc-agentd not available."
-    exit 1
-fi
-
-./elaoc-agentd -c ${PWD}/${CONF} --foreground $*
+${SCRIPT_PATH}/elaoc-agentd -c ${ETCPATH}/elaoc/elaoc-agent.conf --foreground $*
 
 exit 0
 
