@@ -27,11 +27,7 @@ ExternalProject_Add(
 )
 
 if(ENABLE_SHARED)
-    if(WIN32)
-        set(INSTALL_DESTINATION bin)
-    else()
-        set(INSTALL_DESTINATION lib)
-    endif()
+    set(INSTALL_DESTINATION lib)
 
     string(CONCAT SHARED_LIBRARY_NAME
         "${CARRIER_INT_DIST_DIR}/${INSTALL_DESTINATION}/"
@@ -43,5 +39,5 @@ if(ENABLE_SHARED)
         ${SHARED_LIBRARY_NAME})
 
     install(PROGRAMS "${SHARED_LIBRARY_NAME}"
-        DESTINATION ${INSTALL_DESTINATION})
+        DESTINATION usr/${INSTALL_DESTINATION})
 endif()

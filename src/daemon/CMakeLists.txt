@@ -31,15 +31,15 @@ add_executable(elaoc-agentd ${SRC})
 target_link_libraries(elaoc-agentd ${LIBS})
 
 install(TARGETS elaoc-agentd
-    RUNTIME DESTINATION "bin"
-    ARCHIVE DESTINATION "lib"
-    LIBRARY DESTINATION "lib")
+    RUNTIME DESTINATION "usr/bin"
+    ARCHIVE DESTINATION "usr/lib"
+    LIBRARY DESTINATION "usr/lib")
 
 install(PROGRAMS ${CARRIER_SDK_PATH}/lib/libelacarrier${CMAKE_SHARED_LIBRARY_SUFFIX}
-    DESTINATION "lib")
+    DESTINATION "usr/lib")
 
 install(PROGRAMS ${CARRIER_SDK_PATH}/lib/libelasession${CMAKE_SHARED_LIBRARY_SUFFIX}
-    DESTINATION "lib")
+    DESTINATION "usr/lib")
 
 install(PROGRAMS elaoc-agent.sh
-    DESTINATION "bin")
+    DESTINATION "usr/bin")

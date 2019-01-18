@@ -4,7 +4,7 @@ SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 # Running in installation or dist directory
 LDPATH="$(dirname "${SCRIPT_PATH}")/lib"
-ETCPATH="$(dirname "${SCRIPT_PATH}")/etc"
+ETCPATH="$(dirname "${SCRIPT_PATH}")/../etc"
 
 if [ ! -e ${SCRIPT_PATH}/elaoc-agentd ]; then
     echo "Error: elapfd program not available."
