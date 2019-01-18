@@ -36,7 +36,7 @@ typedef struct {
 } PFService;
 
 typedef struct {
-    HashEntry he;
+    hash_entry_t he;
     char *userid;
 } PFUser;
 
@@ -64,7 +64,7 @@ typedef struct {
     char *plain_hello;
 
     PFService *svc;
-    Hashtable *users;
+    hashtable_t *users;
 } PFConfig;
 
 PFConfig *load_config(const char *config_file);

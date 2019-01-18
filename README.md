@@ -17,47 +17,29 @@ https://github.com/elastos/Elastos.NET.Carrier.Native.SDK
 
 Then, follow the steps addressed **README.md** of that repository to build carrier ndk distribution.
 
-### 2. Import Carrier NDK
+### 2. Build ownCloud Agent
 
-After buiding native ndk distribution, you should export path of distribution to environment variable **"$CARRIER\_DIST\_PATH"**.
-
-```shell
-$ export CARRIER_DIST_PATH=YOUR-CARRIER-DIST-PATH
-```
-
-This environment value will be used for building ownCloud agent.
-
-### 3. Build ownCloud Agent
-
-Run the following commands to build agent on MacOS:
+Once you have souce tree, to make compilation for the target to run on host Linux, need to execute following commands under directory of `${YOUR-SOURCE-ROOT}/build`:
 
 ```shell
-$ cd build
-$ ./darwin_build.sh
-
+$ cd YOUR-SOURCE-ROOT/build
+$ mkdir linux
+$ cd linux
+$ cmake ../..
+$ make
 ```
-
-or Run the commands on Linux to build debian package:
+Also to build distribution with specific build type **Debug/Release**, as well as with customized install location of distributions, run the following commands:
 
 ```shell
-$ cd build
-$ ./linux_build.sh dist
+$ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=YOUR-INSTALL-PATH -DCARRIER_SDK_PATH=YOUR-PREBUILT-SDK-INSTALL-PATH ../..
+$ make
+$ make install
 ```
+Eventually, to run the following command to release distribution package for your pre-release tests or even to customers.
 
-or commands on Raspberry Pi device:
-
-```shell
-$ cd build
-$ ./raspbian_build.sh dist
+```bash
+$ make dist
 ```
-
-You also can run the command with 'help' option to get more information:
-
-```shell
-$ ./darwin_build.sh help
-```
-
-Beaware, debian package of ownCloud agent would be generated through build command with **"dist"** option and only be allowed on **Linux**-like (Raspberry if runs Linux) system.
 
 ## Deploy & Run
 

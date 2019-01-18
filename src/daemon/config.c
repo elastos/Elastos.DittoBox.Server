@@ -24,8 +24,9 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <assert.h>
+#include <unistd.h>
 
-#include <confuse.h>
+#include <libconfig.h>
 #include <rc_mem.h>
 
 #include <ela_carrier.h>
@@ -34,54 +35,7 @@
 
 #define DEFAULT_PID_FILE "/var/run/elaoc-agentd/elaoc-agentd.pid"
 
-static void config_error(cfg_t *cfg, const char *fmt, va_list ap)
-{
-    fprintf(stderr, "Config file error, line %d: ", cfg->line);
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-}
-
-static int mode_validator(cfg_t *cfg, cfg_opt_t *opt)
-{
-    const char *stropt = cfg_opt_getnstr(opt, cfg_opt_size(opt) - 1);
-    if (stropt == NULL) {
-        cfg_error(cfg, "Missing mode option");
-        return -1;
-    }
-
-    if (strcmp(stropt, "client") != 0 && strcmp(stropt, "server") != 0) {
-        cfg_error(cfg, "Unknown mode '%s'", stropt);
-        return -1;
-    }
-
-    return 0;
-}
-
-static int service_validator(cfg_t *cfg, cfg_opt_t *opt)
-{
-    cfg_t *sec;
-
-    sec = cfg_opt_getnsec(opt, cfg_opt_size(opt) - 1);
-
-    if (cfg_getstr(sec, "port") == NULL) {
-        cfg_error(cfg, "port option missing");
-        return -1;
-    }
-
-    return 0;
-}
-
-static int not_null_validator(cfg_t *cfg, cfg_opt_t *opt)
-{
-    if (cfg_getstr(cfg, opt->name) == NULL) {
-        cfg_error(cfg, "option '%s' missing.", opt->name);
-        return -1;
-    }
-
-    return 0;
-}
-
-static void config_destroy(void *p)
+static void config_destructor(void *p)
 {
     PFConfig *config = (PFConfig *)p;
 
@@ -128,7 +82,7 @@ static void config_destroy(void *p)
         deref(config->users);
 }
 
-static void service_destroy(void *p)
+static void service_destructor(void *p)
 {
     PFService *svc = (PFService *)p;
 
@@ -142,7 +96,7 @@ static void service_destroy(void *p)
         free(svc->port);
 }
 
-static void user_destroy(void *p)
+static void user_destructor(void *p)
 {
     PFUser *user = (PFUser *)p;
 
@@ -153,7 +107,7 @@ static void user_destroy(void *p)
         free(user->userid);
 }
 
-static void bootstrap_destroy(void *p)
+static void bootstrap_destructor(void *p)
 {
     BootstrapNode *node = (BootstrapNode *)p;
 
@@ -177,126 +131,97 @@ PFConfig *load_config(const char *config_file)
 {
     PFConfig *config;
     PFService *service;
-    cfg_t *cfg, *svc, *sec;
-    cfg_t *bootstraps;
+    config_t cfg;
+    config_setting_t *setting;
     const char *stropt;
-    int nsecs;
+    int intopt;
+    int entries;
     int i;
     int rc;
-    bool is_plain;
 
-    cfg_opt_t service_opts[] = {
-        CFG_STR("host", "127.0.0.1", CFGF_NONE),
-        CFG_STR("port", NULL, CFGF_NODEFAULT),
-        CFG_END()
-    };
+    config_init(&cfg);
 
-    cfg_opt_t bootstrap_opts[] = {
-        CFG_STR("ipv4", NULL, CFGF_NONE),
-        CFG_STR("ipv6", NULL, CFGF_NONE),
-        CFG_STR("port", "33445", CFGF_NONE),
-        CFG_STR("public_key", NULL, CFGF_NONE),
-        CFG_END()
-    };
-
-    cfg_opt_t bootstraps_opts[] = {
-        CFG_SEC("bootstrap", bootstrap_opts, CFGF_MULTI | CFGF_NO_TITLE_DUPES),
-    };
-
-    cfg_opt_t cfg_opts[] = {
-        CFG_BOOL("udp_enabled", true, CFGF_NONE),
-        CFG_SEC("bootstraps", bootstraps_opts, CFGF_NONE),
-        CFG_INT("loglevel", 3, CFGF_NONE),
-        CFG_STR("logfile", NULL, CFGF_NONE),
-        CFG_STR("datadir", NULL, CFGF_NONE),
-        CFG_STR("pidfile", NULL, CFGF_NONE),
-        CFG_STR("announce_address", NULL, CFGF_NONE),
-        CFG_STR("mode", NULL, CFGF_NODEFAULT),
-        CFG_BOOL("plain", 0, CFGF_NONE),
-        CFG_STR("server", NULL, CFGF_NONE),
-        CFG_STR("server_address", NULL, CFGF_NONE),
-        CFG_STR("secret_hello", NULL, CFGF_NONE),
-        CFG_STR("plain_hello", NULL, CFGF_NONE),
-        CFG_SEC("service", service_opts, CFGF_NONE ),
-        CFG_STR_LIST("allowed_users", NULL, CFGF_NONE),
-        CFG_END()
-    };
-
-    cfg = cfg_init(cfg_opts, CFGF_NONE);
-    cfg_set_error_function(cfg, config_error);
-    cfg_set_validate_func(cfg, NULL, not_null_validator);
-    cfg_set_validate_func(cfg, "mode", mode_validator);
-    cfg_set_validate_func(cfg, "service", service_validator);
-
-    rc = cfg_parse(cfg, config_file);
-    if (rc != CFG_SUCCESS) {
-        cfg_error(cfg, "can not parse config file: %s.", config_file);
-        cfg_free(cfg);
+    rc = config_read_file(&cfg, config_file);
+    if (!rc) {
+        fprintf(stderr, "%s:%d - %s\n", config_error_file(&cfg),
+                config_error_line(&cfg), config_error_text(&cfg));
+        config_destroy(&cfg);
         return NULL;
     }
 
-    config = (PFConfig *)rc_zalloc(sizeof(PFConfig), config_destroy);
+    config = (PFConfig *)rc_zalloc(sizeof(PFConfig), config_destructor);
     if (!config) {
-        cfg_error(cfg, "out of memory.");
-        cfg_free(cfg);
+        fprintf(stderr, "Load configuration failed, out of memory.\n");
+        config_destroy(&cfg);
         return NULL;
     }
 
-    config->udp_enabled = cfg_getbool(cfg, "udp_enabled");
+    rc = config_lookup_bool(&cfg, "udp_enabled", &intopt);
+    if (rc && intopt) {
+        config->udp_enabled = true;
+    }
 
-    bootstraps = cfg_getsec(cfg, "bootstraps");
-    if (!bootstraps) {
-        cfg_error(cfg, "missing services section.");
-        cfg_free(cfg);
+    setting = config_lookup(&cfg, "bootstraps");
+    if (!setting) {
+        fprintf(stderr, "Missing bootstraps section.\n");
+        config_destroy(&cfg);
         deref(config);
         return NULL;
     }
 
-    nsecs = cfg_size(bootstraps, "bootstrap");
+    entries = config_setting_length(setting);
+    if (entries <= 0) {
+        fprintf(stderr, "Empty bootstraps option.\n");
+        config_destroy(&cfg);
+        deref(config);
+        return NULL;
+    }
 
-    config->bootstraps_size = nsecs;
+    config->bootstraps_size = entries;
     config->bootstraps = (BootstrapNode **)calloc(1, config->bootstraps_size *
                                                   sizeof(BootstrapNode *));
     if (!config->bootstraps) {
-        cfg_error(cfg, "out of memory.");
-        cfg_free(cfg);
+        fprintf(stderr, "Out of memory.\n");
+        config_destroy(&cfg);
         deref(config);
         return NULL;
     }
 
-    for (i = 0; i < nsecs; i++) {
+    for (i = 0; i < entries; i++) {
         BootstrapNode *node;
 
-        node = rc_zalloc(sizeof(BootstrapNode), bootstrap_destroy);
+        node = rc_zalloc(sizeof(BootstrapNode), bootstrap_destructor);
         if (!node) {
-            cfg_error(cfg, "out of memory.");
-            cfg_free(cfg);
+            fprintf(stderr, "Out of memory.\n");
+            config_destroy(&cfg);
             deref(config);
             return NULL;
         }
 
-        sec = cfg_getnsec(bootstraps, "bootstrap", i);
+        config_setting_t *bs = config_setting_get_elem(setting, i);
 
-        stropt = cfg_getstr(sec, "ipv4");
-        if (stropt)
+        rc = config_setting_lookup_string(bs, "ipv4", &stropt);
+        if (rc && *stropt)
             node->ipv4 = (const char *)strdup(stropt);
         else
             node->ipv4 = NULL;
 
-        stropt = cfg_getstr(sec, "ipv6");
-        if (stropt)
+        rc = config_setting_lookup_string(bs, "ipv6", &stropt);
+        if (rc && *stropt)
             node->ipv6 = (const char *)strdup(stropt);
         else
             node->ipv6 = NULL;
 
-        stropt = cfg_getstr(sec, "port");
-        if (stropt)
-            node->port = (const char *)strdup(stropt);
-        else
+        rc = config_setting_lookup_int(bs, "port", &intopt);
+        if (rc && intopt) {
+            char number[64];
+            sprintf(number, "%d", intopt);
+            node->port = (const char *)strdup(number);
+        } else
             node->port = NULL;
 
-        stropt = cfg_getstr(sec, "public_key");
-        if (stropt)
+        rc = config_setting_lookup_string(bs, "public_key", &stropt);
+        if (rc && *stropt)
             node->public_key = (const char *)strdup(stropt);
         else
             node->public_key = NULL;
@@ -304,188 +229,166 @@ PFConfig *load_config(const char *config_file)
         config->bootstraps[i] = node;
     }
 
-    config->loglevel = (int)cfg_getint(cfg, "loglevel");
+    config->loglevel = 3;
+    config_lookup_int(&cfg, "loglevel", &config->loglevel);
 
-    stropt = cfg_getstr(cfg, "logfile");
-    if (stropt)
+    rc = config_lookup_string(&cfg, "logfile", &stropt);
+    if (rc && *stropt) {
         config->logfile = strdup(stropt);
+    }
 
-    stropt = cfg_getstr(cfg, "datadir");
-    if (!stropt) {
-        char datadir[PATH_MAX];
+    rc = config_lookup_string(&cfg, "datadir", &stropt);
+    if (!rc || !*stropt) {
+        stropt= "data"; // Default datadir
+    }
+    config->datadir = strdup(stropt);
 
-        sprintf(datadir, "%s/%s/%s", getenv("HOME"), ".elaoc",
-                config->mode == MODE_CLIENT ? "client" : "server");
-        config->datadir = strdup(datadir);
-    } else
-        config->datadir = strdup(stropt);
-
-    stropt = cfg_getstr(cfg, "pidfile");
-    if (stropt) {
+    rc = config_lookup_string(&cfg, "pidfile", &stropt);
+    if (rc && *stropt) {
         config->pidfile = strdup(stropt);
     } else {
         config->pidfile = strdup(DEFAULT_PID_FILE);
     }
 
-    stropt = cfg_getstr(cfg, "announce_address");
-    if (stropt) {
+    rc = config_lookup_string(&cfg, "announce_address", &stropt);
+    if (rc && *stropt) {
         config->announce_address = strdup(stropt);
     } else {
         config->announce_address = NULL;
     }
 
-    stropt = cfg_getstr(cfg, "mode");
-    if (!stropt) {
-        cfg_error(cfg, "missing mode option.");
-        cfg_free(cfg);
+    rc = config_lookup_string(&cfg, "mode", &stropt);
+    if (!rc || !*stropt) {
+        fprintf(stderr, "Missing mode option.\n");
+        config_destroy(&cfg);
         deref(config);
         return NULL;
     }
-
-    is_plain = cfg_getbool(cfg, "plain");
-    if (is_plain)
-        config->options |= ELA_STREAM_PLAIN;
-    config->options |= ELA_STREAM_RELIABLE;
 
     if (strcmp(stropt, "client") == 0) {
         config->mode = MODE_CLIENT;
     } else if (strcmp(stropt, "server") == 0) {
         config->mode = MODE_SERVER;
     } else {
-        cfg_error(cfg, "unknown mode '%s'", stropt);
-        cfg_free(cfg);
+        fprintf(stderr, "Unknown mode '%s'.\n", stropt);
+        config_destroy(&cfg);
         deref(config);
         return NULL;
     }
 
-    stropt = cfg_getstr(cfg, "server");
-    if (!stropt) {
-        if (config->mode == MODE_CLIENT) {
-            cfg_error(cfg, "missing server option");
-            cfg_free(cfg);
+    if (config->mode == MODE_CLIENT) {
+        rc = config_lookup_string(&cfg, "server", &stropt);
+        if (!rc || !*stropt) {
+            fprintf(stderr, "Missing server option.\n");
+            config_destroy(&cfg);
             deref(config);
             return NULL;
         }
-    } else {
-        if (config->mode == MODE_SERVER) {
-            cfg_error(cfg, "undesired server option");
-            cfg_free(cfg);
-            deref(config);
-            return NULL;
-        }
-
         config->serverid = strdup(stropt);
-    }
 
-    stropt = cfg_getstr(cfg, "server_address");
-    if (!stropt) {
-        if (config->mode == MODE_CLIENT) {
-            cfg_error(cfg, "missing server option");
-            cfg_free(cfg);
+        rc = config_lookup_string(&cfg, "server_address", &stropt);
+        if (!rc || !*stropt) {
+            fprintf(stderr, "Missing server_address option.\n");
+            config_destroy(&cfg);
             deref(config);
             return NULL;
         }
-    } else {
-        if (config->mode == MODE_SERVER) {
-            cfg_error(cfg, "undesired server option");
-            cfg_free(cfg);
-            deref(config);
-            return NULL;
-        }
-
         config->server_address = strdup(stropt);
     }
 
-    stropt = cfg_getstr(cfg, "secret_hello");
-    if (!stropt) {
+    rc = config_lookup_bool(&cfg, "plain", &intopt);
+    if (rc && intopt)
+        config->options |= ELA_STREAM_PLAIN;
+    config->options |= ELA_STREAM_RELIABLE;
+
+    rc = config_lookup_string(&cfg, "secret_hello", &stropt);
+    if (!rc || !*stropt) {
         if (config->mode == MODE_SERVER) {
-            cfg_error(cfg, "missing secret_hello");
-            cfg_free(cfg);
+            fprintf(stderr, "Missing secret_hello option.\n");
+            config_destroy(&cfg);
             deref(config);
             return NULL;
         }
     } else {
-        if (config->mode == MODE_CLIENT) {
-            cfg_error(cfg, "undesired server option");
-            cfg_free(cfg);
-            deref(config);
-            return NULL;
-        }
-
         config->secret_hello = strdup(stropt);
     }
 
-    stropt = cfg_getstr(cfg, "plain_hello");
-    if (stropt) {
-        if (config->mode == MODE_SERVER) {
-            cfg_error(cfg, "undesired server option");
-            cfg_free(cfg);
-            deref(config);
-            return NULL;
-        }
-
+    rc = config_lookup_string(&cfg, "plain_hello", &stropt);
+    if (rc && *stropt)
         config->plain_hello = strdup(stropt);
-    }
 
-    svc = cfg_getsec(cfg, "service");
-    if (!svc) {
-        cfg_error(cfg, "Missing service options");
-        cfg_free(cfg);
+    setting = config_lookup(&cfg, "service");
+    if (!setting) {
+        fprintf(stderr, "Missing service section.\n");
+        config_destroy(&cfg);
         deref(config);
         return NULL;
     }
 
-    service = rc_zalloc(sizeof(PFService), service_destroy);
+    service = rc_zalloc(sizeof(PFService), service_destructor);
     if (!service) {
-        cfg_error(cfg, "Out of memory");
-        cfg_free(cfg);
-        deref(cfg);
+        fprintf(stderr, "Out of memory");
+        config_destroy(&cfg);
+        deref(config);
         return NULL;
     }
 
-    stropt = cfg_getstr(svc, "host");
-    if (!stropt)
+    rc = config_setting_lookup_string(setting, "host", &stropt);
+    if (!rc || !*stropt)
         stropt = "127.0.0.1";
     service->host = strdup(stropt);
 
-    stropt = cfg_getstr(svc, "port");
-    service->port = strdup(stropt);
+    rc = config_setting_lookup_int(setting, "port", &intopt);
+    if (rc && intopt) {
+        char number[64];
+        sprintf(number, "%d", intopt);
+        service->port = strdup(number);
+    } else {
+        fprintf(stderr, "Missing services port.\n");
+        config_destroy(&cfg);
+        deref(config);
+        return NULL;
+    }
     config->svc = service;
 
     if (config->mode == MODE_SERVER) {
-        int n;
-        int i;
-
-        n = cfg_size(cfg, "allowed_users");
-        config->users = hashtable_create(n * 2, 0, NULL, NULL);
+        config->users = hashtable_create(16, 0, NULL, NULL);
         if (!config->users) {
-            cfg_error(cfg, "out of memory");
-            cfg_free(cfg);
+            fprintf(stderr, "Out of memory");
+            config_destroy(&cfg);
             deref(config);
             return NULL;
         }
 
-        for (i = 0; i < n; i++) {
+        setting = config_lookup(&cfg, "allowed_users");
+        if (!setting)
+            return config;
+
+        entries = config_setting_length(setting);
+        for (i = 0; i < entries; i++) {
             PFUser *user;
 
-            user = rc_zalloc(sizeof(PFUser), user_destroy);
+            user = rc_zalloc(sizeof(PFUser), user_destructor);
             if (!user) {
-                cfg_error(cfg, "Out of memory");
-                cfg_free(cfg);
+                fprintf(stderr, "Out of memory");
+                config_destroy(&cfg);
                 deref(config);
                 return NULL;
             }
 
-            stropt = cfg_getnstr(cfg, "allowed_users", i);
+            stropt = config_setting_get_string_elem(setting, i);
+            if (!stropt || !*stropt)
+                continue;
+
             if (!ela_id_is_valid(stropt)) {
-                cfg_error(cfg, "User id '%s' is invalid", stropt);
-                cfg_free(cfg);
+                fprintf(stderr, "User id '%s' is invalid", stropt);
+                config_destroy(&cfg);
                 deref(user);
                 deref(config);
                 return NULL;
             }
-            user->userid = strdup(stropt);
 
+            user->userid = strdup(stropt);
             user->he.key = user->userid;
             user->he.keylen = strlen(user->userid);
             user->he.data = user;
