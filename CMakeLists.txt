@@ -25,6 +25,16 @@ add_subdirectory(src)
 install(FILES config/elaoc-agent.conf
     DESTINATION "etc/elaoc")
 
+install(FILES scripts/elaoc-agentd.service
+    DESTINATION "lib/systemd/system")
+
+install(PROGRAMS scripts/elaoc-agentd.sh
+    DESTINATION "etc/init.d"
+    RENAME "elaoc-agentd")
+
+install(DIRECTORY
+    DESTINATION "var/lib/elaoc-agentd")
+
 # make dist package
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     add_custom_target(dist
