@@ -21,6 +21,11 @@ link_directories(
 
 add_definitions(-DLIBCONFIG_STATIC)
 
+check_include_file(getopt.h HAVE_GETOPT_H)
+if(HAVE_GETOPT_H)
+    add_definitions(-DHAVE_GETOPT_H=1)
+endif()
+
 set(LIBS
     elacarrier
     elasession

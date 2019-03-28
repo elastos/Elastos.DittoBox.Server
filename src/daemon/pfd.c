@@ -25,22 +25,21 @@
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <getopt.h>
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <assert.h>
 #include <pthread.h>
 
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
+#endif
+
+#include <crystal.h>
 #include <sys/resource.h>
 
 #include <ela_carrier.h>
 #include <ela_session.h>
-
-#include <vlog.h>
-#include <linkedhashtable.h>
-#include <rc_mem.h>
-#include <crypto.h>
-#include <base58.h>
 
 #include "config.h"
 
@@ -460,7 +459,7 @@ static void setup_portforwardings(void)
     }
 }
 
-static void shutdown(void)
+static void session_close(void)
 {
     hashtable_t *ss = sessions;
 
@@ -522,7 +521,7 @@ static void daemonize(const char *pid_file_path)
 
 static void signal_handler(int signum)
 {
-    shutdown();
+    session_close();
 }
 
 int sys_coredump_set(bool enable)
@@ -731,7 +730,7 @@ int main(int argc, char *argv[])
     if (!carrier) {
         fprintf(stderr, "Can not create Carrier instance (%08X).\n",
                 ela_get_error());
-        shutdown();
+        session_close();
         return -1;
     }
 
@@ -741,7 +740,7 @@ int main(int argc, char *argv[])
     if (rc < 0) {
         fprintf(stderr, "Can not initialize Carrier session extension (%08X).",
                 ela_get_error());
-        shutdown();
+        session_close();
         return -1;
     }
 
@@ -749,7 +748,7 @@ int main(int argc, char *argv[])
     if (rc < 0) {
         fprintf(stderr, "Can not initialize Carrier session extension (%08X).",
                 ela_get_error());
-        shutdown();
+        session_close();
         return -1;
     }
 
@@ -757,6 +756,6 @@ int main(int argc, char *argv[])
     if (rc < 0)
         fprintf(stderr, "Can not start Carrier.\n");
 
-    shutdown();
+    session_close();
     return rc;
 }
