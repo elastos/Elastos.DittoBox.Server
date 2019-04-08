@@ -77,4 +77,4 @@ We welcome contributions to the ownCloud agent Project in many forms.
 
 ## License
 
-MIT
+GPLv3
